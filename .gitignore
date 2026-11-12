@@ -1,0 +1,25 @@
+# Secrets: never commit API keys or credentials
+.env
+.env.*
+*.key
+secrets*
+api_key*
+
+# Real company data: this project uses fictional data only
+real-data/
+private/
+
+# Python and editor clutter
+__pycache__/
+*.pyc
+.venv/
+venv/
+.vscode/
+.idea/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Claude Code local settings
+.claude/settings.local.json
