@@ -3,7 +3,9 @@
   "currency": "CAD",
   "component": {
     "part_number": "BRG-6204",
-    "description": "Sealed ball bearing"
+    "description": "Sealed ball bearing",
+    "used_in": "Conveyor repair kit",
+    "units_per_kit": 1
   },
   "inventory": {
     "on_hand": 40
@@ -33,13 +35,13 @@
       "supplier": "Northline Bearings",
       "quantity": 60,
       "arrives_on": "2026-11-19",
-      "unit_cost": "12.00",
-      "extra_fees": "0.00"
+      "unit_cost": "11.50",
+      "extra_fees": "30.00"
     },
     {
       "supplier": "Lakeshore Components",
-      "quantity": 60,
-      "arrives_on": "2026-11-23",
+      "quantity": 40,
+      "arrives_on": "2026-11-19",
       "unit_cost": "11.00",
       "extra_fees": "0.00"
     }

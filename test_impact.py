@@ -106,8 +106,8 @@ class DemoScriptTests(unittest.TestCase):
             output,
         )
         self.assertIn(
-            "Lakeshore Components | Extra cost: CAD 60.00\n"
-            "  CO-1001: 60 units short by 2026-11-20 | Complete: 2026-11-23\n"
+            "Lakeshore Components | Extra cost: CAD 40.00\n"
+            "  CO-1001: 20 units short by 2026-11-20 | Complete: 2026-11-23\n"
             "  CO-1002: 0 units short by 2026-11-23 | Complete: 2026-11-23",
             output,
         )
