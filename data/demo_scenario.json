@@ -1,0 +1,47 @@
+{
+  "as_of": "2026-11-18",
+  "currency": "CAD",
+  "component": {
+    "part_number": "BRG-6204",
+    "description": "Sealed ball bearing"
+  },
+  "inventory": {
+    "on_hand": 40
+  },
+  "purchase_order": {
+    "po_number": "PO-2841",
+    "supplier": "Maple Industrial Parts",
+    "quantity": 100,
+    "original_arrival_on": "2026-11-19",
+    "revised_arrival_on": "2026-11-23",
+    "unit_cost": "10.00"
+  },
+  "customer_orders": [
+    {
+      "order_id": "CO-1001",
+      "quantity": 100,
+      "due_on": "2026-11-20"
+    },
+    {
+      "order_id": "CO-1002",
+      "quantity": 40,
+      "due_on": "2026-11-23"
+    }
+  ],
+  "replacement_offers": [
+    {
+      "supplier": "Northline Bearings",
+      "quantity": 60,
+      "arrives_on": "2026-11-19",
+      "unit_cost": "12.00",
+      "extra_fees": "0.00"
+    },
+    {
+      "supplier": "Lakeshore Components",
+      "quantity": 60,
+      "arrives_on": "2026-11-23",
+      "unit_cost": "11.00",
+      "extra_fees": "0.00"
+    }
+  ]
+}
