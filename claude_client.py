@@ -11,7 +11,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-5-5")
+# Haiku is the cheapest Claude model and is enough for reading one email.
+# Override it by setting CLAUDE_MODEL in .env.
+DEFAULT_MODEL = "claude-haiku-5-5"
+MODEL = os.getenv("CLAUDE_MODEL", DEFAULT_MODEL)
+
+
+class MissingApiKeyError(RuntimeError):
+    """Raised when Claude is needed but no ANTHROPIC_API_KEY is set in .env."""
 
 
 def has_api_key() -> bool:
@@ -25,6 +32,10 @@ def get_client() -> anthropic.Anthropic:
 
 def ask_claude(prompt: str, system: str = "", max_tokens: int = 4000) -> str:
     """Send a single prompt to Claude and return the text reply."""
+    if not has_api_key():
+        raise MissingApiKeyError(
+            "No API key found. Add ANTHROPIC_API_KEY to the .env file."
+        )
     client = get_client()
     kwargs = {
         "model": MODEL,
