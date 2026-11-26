@@ -1,0 +1,17 @@
+From: Order Desk <orders@maple-industrial.example>
+Date: Wednesday, November 18, 2026
+Subject: Delivery delay for PO-2841 (BRG-6204)
+
+Hi Purchasing Team,
+
+A packing equipment failure has delayed all 100 sealed ball bearings
+(part BRG-6204) on purchase order PO-2841. We originally confirmed delivery
+for Thursday, November 19, 2026. The revised delivery date is Monday,
+November 23, 2026.
+
+If you can source part of the order elsewhere, we can reduce our shipment
+quantity and credit the canceled units at the original price. There is no
+cancellation fee for this delay.
+
+Thanks,
+Maple Industrial Parts Order Desk
