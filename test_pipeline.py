@@ -32,12 +32,14 @@ EXPLANATION = {
     "customer_email_draft": "Hi, order CO-1001 is delayed.",
 }
 
+# Matches the real impact.py output for data/demo_scenario.json (trimmed to
+# one order): waiting leaves CO-1001 60 short; Northline meets the deadline.
 ANALYSIS = NS(
-    baseline=(NS(order_id="CO-1001", shortage_at_due_date=100,
+    baseline=(NS(order_id="CO-1001", shortage_at_due_date=60,
                  projected_fulfillment_on=date(2026, 11, 23)),),
     options=(NS(supplier="Northline Bearings", incremental_cost=Decimal("120.00"),
-                orders=(NS(order_id="CO-1001", shortage_at_due_date=40,
-                           projected_fulfillment_on=date(2026, 11, 23)),)),),
+                orders=(NS(order_id="CO-1001", shortage_at_due_date=0,
+                           projected_fulfillment_on=date(2026, 11, 19)),)),),
 )
 
 
