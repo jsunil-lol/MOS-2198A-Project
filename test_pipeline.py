@@ -29,7 +29,8 @@ GOOD_FACTS = {
 EXPLANATION = {
     "recommendation": "Order from Northline Bearings; it costs 120.00 extra.",
     "supplier_email_draft": "Hi Maple, we will wait for the shipment.",
-    "customer_email_draft": "Hi, order CO-1001 is delayed.",
+    # No customer names are passed, so the order is its own customer.
+    "customer_emails": [{"customer": "CO-1001", "email": "Hi, order CO-1001 was at risk."}],
 }
 
 # Matches the real impact.py output for data/demo_scenario.json (trimmed to

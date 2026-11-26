@@ -18,7 +18,7 @@ from decimal import Decimal
 from types import SimpleNamespace as NS
 
 import claude_client
-from explanation import choose_recommendation, explain_recovery
+from explanation import CustomerDraft, choose_recommendation, explain_recovery
 
 
 def impact(order_id, shortage, fulfilled_on):
@@ -44,6 +44,9 @@ ANALYSIS = NS(
     ),
 )
 
+SAME_CUSTOMER = {"CO-1001": "Acme Conveyors", "CO-1002": "Acme Conveyors"}
+TWO_CUSTOMERS = {"CO-1001": "Acme Conveyors", "CO-1002": "Beta Mills"}
+
 
 def option(supplier, cost, *shortages):
     """An option whose orders have the given shortages (for rule tests)."""
@@ -57,16 +60,26 @@ def analysis_of(baseline_shortages, *options):
     return NS(baseline=baseline, options=tuple(options))
 
 
+CUSTOMER_EMAIL = ("Hi, order CO-1001 would have been 60 units short, but it is now "
+                  "supplied on 2026-11-19.")
+
 GOOD_REPLY = {
     "recommendation": "Order from Northline Bearings. It costs 120.00 extra and cuts "
                       "the CO-1001 shortage from 60 to 0 units.",
     "supplier_email_draft": "Hi Maple, we will wait for the rest of the shipment due 2026-11-23.",
-    "customer_email_draft": "Hi, order CO-1001 is delayed; 60 units are short if we wait.",
+    # With no customer names given, each order is its own customer.
+    "customer_emails": [{"customer": "CO-1001", "email": CUSTOMER_EMAIL}],
 }
 
 
 def reply_with(**changes):
+    """A Claude reply (as JSON text) that is GOOD_REPLY with some fields changed."""
     return json.dumps({**GOOD_REPLY, **changes})
+
+
+def emails(*pairs):
+    """The customer_emails part of a reply, from (customer, text) pairs."""
+    return [{"customer": name, "email": text} for name, text in pairs]
 
 
 class FakeClaude:
@@ -82,13 +95,13 @@ class FakeClaude:
 
 
 class GoodExplanationTests(unittest.TestCase):
-    def test_good_reply_gives_three_texts_and_no_flag(self):
+    def test_good_reply_gives_the_texts_and_no_flag(self):
         # Breaks if: a text is dropped or a correct explanation is flagged.
         result = explain_recovery(ANALYSIS, ask=FakeClaude(json.dumps(GOOD_REPLY)))
 
         self.assertEqual(result.recommendation, GOOD_REPLY["recommendation"])
         self.assertEqual(result.supplier_email_draft, GOOD_REPLY["supplier_email_draft"])
-        self.assertEqual(result.customer_email_draft, GOOD_REPLY["customer_email_draft"])
+        self.assertEqual(result.customer_email_drafts, (CustomerDraft("CO-1001", CUSTOMER_EMAIL),))
         self.assertFalse(result.needs_review)
         self.assertEqual(result.issues, ())
 
@@ -182,8 +195,7 @@ class RecommendationInTheExplanationTests(unittest.TestCase):
     def test_waiting_recommendation_must_say_to_wait(self):
         # Breaks if: a text that never mentions waiting passes when waiting is chosen.
         analysis = analysis_of((0, 0), option("Northline Bearings", "120.00", 0, 0))
-        plain = {"supplier_email_draft": "Hi Maple, we will wait.",
-                 "customer_email_draft": "Hi, your order may be delayed."}
+        plain = {"supplier_email_draft": "Hi Maple, we will wait.", "customer_emails": []}
         says_wait = reply_with(recommendation="Wait for Maple's shipment; no extra cost.", **plain)
         says_buy = reply_with(recommendation="Buy from Northline Bearings.", **plain)
 
@@ -202,16 +214,82 @@ class RecommendationInTheExplanationTests(unittest.TestCase):
         self.assertIsNone(result.recommended_supplier)
         self.assertTrue(any("decide" in issue for issue in result.issues))
         self.assertIn("No option", fake.calls[0]["prompt"])
+        self.assertEqual(result.customer_email_drafts, ())  # nothing is settled yet
+
+
+class CustomerEmailTests(unittest.TestCase):
+    def test_one_email_per_customer_covers_affected_and_unaffected_orders(self):
+        # Breaks if: a customer with two orders gets two emails, or the email
+        # drops the order that is fine (or the one that is not).
+        text = ("Hi Acme, order CO-1001 would have been 60 units short but is now supplied "
+                "on 2026-11-19. Order CO-1002 is not affected.")
+        fake = FakeClaude(reply_with(customer_emails=emails(("Acme Conveyors", text))))
+
+        result = explain_recovery(ANALYSIS, customers=SAME_CUSTOMER, ask=fake)
+
+        self.assertEqual(result.customer_email_drafts, (CustomerDraft("Acme Conveyors", text),))
+        self.assertFalse(result.needs_review)
+        lines = {l.split(":")[0].strip(): l for l in fake.calls[0]["prompt"].splitlines()
+                 if l.strip().startswith("Order CO-")}
+        self.assertIn("AFFECTED", lines["Order CO-1001"])
+        self.assertNotIn("NOT AFFECTED", lines["Order CO-1001"])
+        self.assertIn("60", lines["Order CO-1001"])
+        self.assertIn("NOT AFFECTED", lines["Order CO-1002"])
+
+    def test_a_customer_with_no_affected_order_gets_no_email(self):
+        # Breaks if: a customer whose order is fine is emailed (or sent to Claude).
+        text = "Hi Acme, order CO-1001 would have been 60 units short but is now supplied."
+        fake = FakeClaude(reply_with(customer_emails=emails(("Acme Conveyors", text))))
+
+        result = explain_recovery(ANALYSIS, customers=TWO_CUSTOMERS, ask=fake)
+
+        self.assertEqual([d.customer for d in result.customer_email_drafts], ["Acme Conveyors"])
+        self.assertNotIn("Beta Mills", fake.calls[0]["prompt"])
+        self.assertFalse(result.needs_review)
+
+    def test_an_email_that_leaves_out_one_of_the_customers_orders_is_flagged(self):
+        # Breaks if: the unaffected order CO-1002 can be silently omitted.
+        text = "Hi Acme, order CO-1001 would have been 60 units short but is now supplied."
+        reply = reply_with(customer_emails=emails(("Acme Conveyors", text)))
+
+        result = explain_recovery(ANALYSIS, customers=SAME_CUSTOMER, ask=FakeClaude(reply))
+
+        self.assertTrue(result.needs_review)
+        self.assertTrue(any("CO-1002" in issue for issue in result.issues))
+
+    def test_a_missing_customer_email_is_flagged_with_an_empty_draft(self):
+        # Breaks if: a customer who needs an email silently gets none.
+        result = explain_recovery(ANALYSIS, ask=FakeClaude(reply_with(customer_emails=[])))
+
+        self.assertTrue(result.needs_review)
+        self.assertEqual(result.customer_email_drafts, (CustomerDraft("CO-1001", ""),))
+        self.assertTrue(any("CO-1001" in issue for issue in result.issues))
+
+    def test_no_affected_customers_means_no_emails_and_no_flag(self):
+        # Breaks if: nothing is wrong yet an email is demanded or the result is flagged.
+        analysis = analysis_of((0, 0), option("Northline Bearings", "120.00", 0, 0))
+        reply = reply_with(recommendation="Wait for Maple's shipment; no extra cost.",
+                           supplier_email_draft="Hi Maple, we will wait.", customer_emails=[])
+        fake = FakeClaude(reply)
+
+        result = explain_recovery(analysis, ask=fake)
+
+        self.assertEqual(result.customer_email_drafts, ())
+        self.assertFalse(result.needs_review)
+        self.assertIn("none", fake.calls[0]["prompt"].lower())
 
 
 class InventedNumberTests(unittest.TestCase):
     def test_a_number_not_in_the_data_is_flagged(self):
         # Breaks if: Claude can quote "$450" or "75 units" that no calculation produced.
-        for field in ("recommendation", "supplier_email_draft", "customer_email_draft"):
-            with self.subTest(field=field):
-                reply = reply_with(**{field: "This will cost 450 extra."})
-
-                result = explain_recovery(ANALYSIS, ask=FakeClaude(reply))
+        cases = {
+            "recommendation": {"recommendation": "Northline Bearings will cost 450 extra."},
+            "supplier_email_draft": {"supplier_email_draft": "This will cost 450 extra."},
+            "customer email": {"customer_emails": emails(("CO-1001", "Order CO-1001 costs 450 extra."))},
+        }
+        for name, change in cases.items():
+            with self.subTest(field=name):
+                result = explain_recovery(ANALYSIS, ask=FakeClaude(reply_with(**change)))
 
                 self.assertTrue(result.needs_review)
                 self.assertTrue(any("450" in issue for issue in result.issues))
@@ -232,15 +310,17 @@ class BadReplyTests(unittest.TestCase):
 
         self.assertTrue(result.needs_review)
         self.assertEqual(result.recommendation, "")
+        self.assertEqual(result.customer_email_drafts, ())
 
     def test_reply_missing_a_text_is_flagged(self):
-        # Breaks if: a missing customer draft is silently shown as blank.
-        partial = json.dumps({"recommendation": "Order from Northline Bearings."})
+        # Breaks if: a missing supplier draft is silently shown as blank.
+        partial = json.dumps({"recommendation": "Order from Northline Bearings.",
+                              "customer_emails": emails(("CO-1001", CUSTOMER_EMAIL))})
 
         result = explain_recovery(ANALYSIS, ask=FakeClaude(partial))
 
         self.assertTrue(result.needs_review)
-        self.assertTrue(any("customer_email_draft" in issue for issue in result.issues))
+        self.assertTrue(any("supplier_email_draft" in issue for issue in result.issues))
 
     def test_missing_api_key_is_flagged_with_a_clear_message(self):
         # Breaks if: running without a key crashes the screen.
@@ -256,7 +336,7 @@ class BadReplyTests(unittest.TestCase):
         result = explain_recovery(ANALYSIS, ask=FakeClaude(RuntimeError("timeout")))
 
         self.assertTrue(result.needs_review)
-        self.assertEqual(result.customer_email_draft, "")
+        self.assertEqual(result.customer_email_drafts, ())
 
 
 if __name__ == "__main__":
